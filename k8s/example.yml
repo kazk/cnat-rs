@@ -1,0 +1,8 @@
+apiVersion: example.kazk.dev/v1alpha1
+kind: At
+metadata:
+  name: example-at
+spec:
+  # https://www.utctime.net/
+  schedule: "2020-12-17T22:40:00Z"
+  command: ["date", "-u", '+"%Y-%m-%dT%H:%M:%SZ"']
