@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 use chrono::{DateTime, Utc};
 use futures::StreamExt;
 use k8s_openapi::{
@@ -47,18 +45,18 @@ async fn reconcile(at: At, ctx: Context<ContextData>) -> Result<ReconcilerAction
     match at.status.as_ref().map(|s| s.phase) {
         None => {
             log::debug!("status.phase: none");
-            let d = duration_until_schedule(&at.spec.schedule)?;
-            if d.as_secs() != 0 {
-                // Not yet
-                Ok(ReconcilerAction {
-                    requeue_after: Some(d),
-                })
-            } else {
+            let schedule = at.spec.schedule;
+            let now: DateTime<Utc> = Utc::now();
+            if schedule <= now {
                 // Ready to execute
-                let client = ctx.get_ref().client.clone();
-                to_next_phase(client, &at, AtPhase::Running).await?;
+                to_next_phase(ctx.get_ref().client.clone(), &at, AtPhase::Running).await?;
                 Ok(ReconcilerAction {
                     requeue_after: None,
+                })
+            } else {
+                // Not yet
+                Ok(ReconcilerAction {
+                    requeue_after: Some((schedule - now).to_std().unwrap()),
                 })
             }
         }
@@ -172,14 +170,4 @@ fn object_to_owner_reference<K: Meta>(meta: ObjectMeta) -> Result<OwnerReference
         uid: meta.uid.ok_or(Error::MissingObjectKey(".metadata.uid"))?,
         ..OwnerReference::default()
     })
-}
-
-fn duration_until_schedule(schedule: &str) -> Result<Duration> {
-    let time = schedule.parse::<DateTime<Utc>>()?;
-    let now: DateTime<Utc> = Utc::now();
-    if time <= now {
-        Ok(Duration::from_secs(0))
-    } else {
-        Ok((time - now).to_std().unwrap())
-    }
 }

@@ -4,5 +4,5 @@ metadata:
   name: example-at
 spec:
   # https://www.utctime.net/
-  schedule: "2020-12-17T22:40:00Z"
+  schedule: "2020-12-22T01:12:00Z"
   command: ["date", "-u", '+"%Y-%m-%dT%H:%M:%SZ"']
