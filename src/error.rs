@@ -18,6 +18,8 @@ pub enum Error {
     MissingObjectKey(&'static str),
     #[error("Timed out: {0}")]
     TimedOut(String),
+    #[error("Missing CRD")]
+    MissingCRD,
 }
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;
