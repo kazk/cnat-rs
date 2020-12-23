@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use futures::StreamExt;
+use futures::{future, StreamExt};
 use k8s_openapi::{
     api::core::v1::{Container, Pod, PodSpec},
     apimachinery::pkg::apis::meta::v1::OwnerReference,
@@ -10,6 +10,7 @@ use kube::{
     Api, Client, Error as KubeError,
 };
 use kube_runtime::controller::{Context, Controller, ReconcilerAction};
+use tracing::{debug, info, instrument, warn};
 
 use crate::crd::{At, AtPhase, AtStatus};
 use crate::error::{Error, Result};
@@ -26,11 +27,10 @@ pub async fn run(client: Client) {
                 client: client.clone(),
             }),
         )
-        .for_each(|res| async move {
-            match res {
-                Ok(o) => log::debug!("reconciled {:?}", o),
-                Err(e) => log::error!("reconcile failed: {}", e),
-            }
+        .filter_map(|x| async move { x.ok() })
+        .for_each(|o| {
+            info!("Reconciled {:?}", o);
+            future::ready(())
         })
         .await;
 }
@@ -41,10 +41,11 @@ struct ContextData {
 }
 
 /// The reconciler called when `At` or `Pod` change.
+#[instrument(skip(ctx))]
 async fn reconcile(at: At, ctx: Context<ContextData>) -> Result<ReconcilerAction> {
     match at.status.as_ref().map(|s| s.phase) {
         None => {
-            log::debug!("status.phase: none");
+            debug!("status.phase: none");
             let schedule = at.spec.schedule;
             let now: DateTime<Utc> = Utc::now();
             if schedule <= now {
@@ -62,7 +63,7 @@ async fn reconcile(at: At, ctx: Context<ContextData>) -> Result<ReconcilerAction
         }
 
         Some(AtPhase::Running) => {
-            log::debug!("status.phase: running");
+            debug!("status.phase: running");
             let client = ctx.get_ref().client.clone();
             let pods = Api::<Pod>::namespaced(client.clone(), &get_namespace_ref(&at)?);
             match pods.get(&get_name_ref(&at)?).await {
@@ -95,7 +96,7 @@ async fn reconcile(at: At, ctx: Context<ContextData>) -> Result<ReconcilerAction
         }
 
         Some(AtPhase::Done) => {
-            log::debug!("status.phase: done");
+            debug!("status.phase: done");
             Ok(ReconcilerAction {
                 requeue_after: None,
             })
@@ -104,7 +105,8 @@ async fn reconcile(at: At, ctx: Context<ContextData>) -> Result<ReconcilerAction
 }
 
 /// An error handler called when the reconciler fails.
-fn error_policy(_error: &Error, _ctx: Context<ContextData>) -> ReconcilerAction {
+fn error_policy(error: &Error, _ctx: Context<ContextData>) -> ReconcilerAction {
+    warn!("reconcile failed: {}", error);
     ReconcilerAction {
         requeue_after: None,
     }
