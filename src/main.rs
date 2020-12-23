@@ -1,6 +1,6 @@
 use argh::FromArgs;
 use kube::Client;
-use simple_logger::SimpleLogger;
+use tracing::{error, info};
 
 mod controller;
 mod crd;
@@ -22,27 +22,29 @@ struct Options {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    tracing_subscriber::fmt()
+        .with_max_level(tracing::Level::INFO)
+        .init();
+
     let opts: Options = argh::from_env();
     if opts.gen_crd {
         println!("{}", serde_yaml::to_string(&At::crd()).unwrap());
         return Ok(());
     }
 
-    SimpleLogger::from_env().init().unwrap();
-
     let client = Client::try_default().await?;
     if !crd::exists(client.clone()).await {
         if !opts.auto_install {
-            eprintln!("CRD is not installed. Generate and apply before running or use auto-install option.");
+            error!("CRD is not installed. Generate and apply before running or use auto-install option.");
             return Err(Error::MissingCRD);
         }
 
-        log::info!("Creating At CRD");
+        info!("Creating At CRD");
         crd::create(client.clone()).await?;
-        crd::wait_for_ready(client.clone(), 5).await?;
-        log::info!("Successfully created At CRD");
+        crd::wait_for_ready(client.clone(), 15).await?;
+        info!("Successfully created At CRD");
     }
-    log::info!("Running controller");
+    info!("Running controller");
     controller::run(client.clone()).await;
     Ok(())
 }
