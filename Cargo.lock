@@ -672,8 +672,9 @@ dependencies = [
 
 [[package]]
 name = "kube"
-version = "0.43.0"
-source = "git+https://github.com/clux/kube-rs?rev=73f02689b12198631e1eb035cae0592056bb10e8#73f02689b12198631e1eb035cae0592056bb10e8"
+version = "0.44.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6585da8efec1a3b5df0fb12b357e2f3921cd7436a6d10f1ea06377d4cbd85032"
 dependencies = [
  "Inflector",
  "base64 0.12.3",
@@ -703,8 +704,9 @@ dependencies = [
 
 [[package]]
 name = "kube-derive"
-version = "0.43.0"
-source = "git+https://github.com/clux/kube-rs?rev=73f02689b12198631e1eb035cae0592056bb10e8#73f02689b12198631e1eb035cae0592056bb10e8"
+version = "0.44.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0101a3777e606d7204aa830a9affcb328767912e406932f53704c6efbcf9afa4"
 dependencies = [
  "Inflector",
  "proc-macro2",
@@ -736,8 +738,9 @@ dependencies = [
 
 [[package]]
 name = "kube-runtime"
-version = "0.43.0"
-source = "git+https://github.com/clux/kube-rs?rev=73f02689b12198631e1eb035cae0592056bb10e8#73f02689b12198631e1eb035cae0592056bb10e8"
+version = "0.44.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0b01bed1a72a06d987a98d28b49e70c9e43f600720348a48d48291d94ba003f6"
 dependencies = [
  "dashmap",
  "derivative",
