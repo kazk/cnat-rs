@@ -1,0 +1,33 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: at-controller
+  namespace: default
+  labels:
+    app: at-controller
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: at-controller
+  template:
+    metadata:
+      labels:
+        app: at-controller
+    spec:
+      serviceAccountName: at-controller
+      containers:
+        - name: at-controller
+          # When running in local k3s cluster using k3d, build the image and
+          # import with `k3d image import ghcr.io/kazk/cnat:latest -c dev`.
+          image: "ghcr.io/kazk/cnat:latest"
+          imagePullPolicy: IfNotPresent
+          # imagePullPolicy: Always
+          resources:
+            limits:
+              cpu: 100m
+              memory: 100Mi
+            requests:
+              cpu: 50m
+              memory: 50Mi
