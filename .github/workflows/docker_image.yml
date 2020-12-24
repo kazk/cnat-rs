@@ -29,7 +29,7 @@ jobs:
           # - Get the version string (assuming the format `version = "x.x.x"`)
           # - Remove quotes
           VERSION=$(grep version Cargo.toml | head -n 1 | awk '{ print $3 }' | tr -d \")
-          SHORT_SHA=$(echo ${{ GITHUB_SHA }} | cut -c1-8)
+          SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-8)
           echo "::set-output version=$VERSION"
           echo "::set-output sha=$SHORT_SHA"
 
