@@ -1,0 +1,52 @@
+---
+# Scoped service account
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: at-controller
+  namespace: default
+automountServiceAccountToken: true
+
+---
+# Access for the service account
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: control-ats
+rules:
+  # Allow checking if CRD is installed
+  - apiGroups: ["apiextensions.k8s.io"]
+    resources: ["customresourcedefinitions"]
+    verbs:
+      - get
+  - apiGroups: ["example.kazk.dev"]
+    resources: ["ats", "ats/status"]
+    verbs:
+      - create
+      - get
+      - patch
+      - delete
+      - list
+      - watch
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs:
+      - create
+      - get
+      - list
+      - watch
+
+---
+# Binding the role to the account in default
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: at-controller-binding
+subjects:
+  - kind: ServiceAccount
+    namespace: default
+    name: at-controller
+roleRef:
+  kind: ClusterRole
+  name: control-ats
+  apiGroup: rbac.authorization.k8s.io
