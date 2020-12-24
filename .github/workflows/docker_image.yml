@@ -30,8 +30,8 @@ jobs:
           # - Remove quotes
           VERSION=$(grep version Cargo.toml | head -n 1 | awk '{ print $3 }' | tr -d \")
           SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-8)
-          echo "::set-output version=$VERSION"
-          echo "::set-output sha=$SHORT_SHA"
+          echo "::set-output name=version::$VERSION"
+          echo "::set-output name=sha::$SHORT_SHA"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v1
