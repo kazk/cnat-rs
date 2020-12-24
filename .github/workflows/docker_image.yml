@@ -45,6 +45,12 @@ jobs:
           # https://docs.github.com/en/free-pro-team@latest/packages/guides/about-github-container-registry#about-scopes-and-permissions-for-github-container-registry
           password: ${{ secrets.GHCR_TOKEN }}
 
+      - name: Login to DockerHub
+        uses: docker/login-action@v1
+        with:
+          username: kazk
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
       - name: Build and push
         uses: docker/build-push-action@v2
         with:
@@ -52,4 +58,9 @@ jobs:
           cache-from: type=local,src=/tmp/.buildx-cache
           cache-to: type=local,dest=/tmp/.buildx-cache,mode=max
           tags: |
-            ghcr.io/kazk/cnat:latest,ghcr.io/kazk/cnat:${{ steps.prepare.outputs.sha }},ghcr.io/kazk/cnat:${{ steps.prepare.outputs.version }}
+            ghcr.io/kazk/cnat:latest
+            ghcr.io/kazk/cnat:${{ steps.prepare.outputs.sha }}
+            ghcr.io/kazk/cnat:${{ steps.prepare.outputs.version }}
+            kazk/cnat:latest
+            kazk/cnat:${{ steps.prepare.outputs.sha }}
+            kazk/cnat:${{ steps.prepare.outputs.version }}
