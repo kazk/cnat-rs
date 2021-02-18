@@ -1,36 +1,44 @@
 use chrono::{DateTime, Utc};
-use futures::{future, StreamExt};
+use futures::StreamExt;
 use k8s_openapi::{
     api::core::v1::{Container, Pod, PodSpec},
     apimachinery::pkg::apis::meta::v1::OwnerReference,
 };
 use kube::{
-    api::{ListParams, Meta, ObjectMeta, PatchParams, PostParams},
+    api::{ListParams, Meta, ObjectMeta, Patch, PatchParams, PostParams},
     error::ErrorResponse,
     Api, Client, Error as KubeError,
 };
 use kube_runtime::controller::{Context, Controller, ReconcilerAction};
-use tracing::{debug, info, instrument, warn};
+use snafu::{ResultExt, Snafu};
+use tracing::{debug, trace, warn};
 
-use crate::crd::{At, AtPhase, AtStatus};
-use crate::error::{Error, Result};
+use crate::resource::{At, AtPhase, AtStatus};
+
+#[derive(Debug, Snafu)]
+pub enum Error {
+    #[snafu(display("Failed to get Pod: {}", source))]
+    GetPod { source: kube::Error },
+    #[snafu(display("Failed to create Pod: {}", source))]
+    CreatePod { source: kube::Error },
+    #[snafu(display("Failed to patch status: {}", source))]
+    PatchStatus { source: kube::Error },
+    #[snafu(display("Missing object key: {}", key))]
+    MissingObjectKey { key: &'static str },
+}
+pub type Result<T, E = Error> = std::result::Result<T, E>;
 
 pub async fn run(client: Client) {
-    let ats = Api::<At>::all(client.clone());
-    let pods = Api::<Pod>::all(client.clone());
-    Controller::new(ats, ListParams::default())
-        .owns(pods, ListParams::default())
-        .run(
-            reconcile,
-            error_policy,
-            Context::new(ContextData {
-                client: client.clone(),
-            }),
-        )
+    let context = Context::new(ContextData {
+        client: client.clone(),
+    });
+    let lp = ListParams::default();
+    Controller::<At>::new(Api::all(client.clone()), lp.clone())
+        .owns::<Pod>(Api::all(client.clone()), lp)
+        .run(reconciler, error_policy, context)
         .filter_map(|x| async move { x.ok() })
-        .for_each(|o| {
-            info!("Reconciled {:?}", o);
-            future::ready(())
+        .for_each(|(_, action)| async move {
+            trace!("Reconciled: requeue after {:?}", action.requeue_after);
         })
         .await;
 }
@@ -41,8 +49,8 @@ struct ContextData {
 }
 
 /// The reconciler called when `At` or `Pod` change.
-#[instrument(skip(ctx))]
-async fn reconcile(at: At, ctx: Context<ContextData>) -> Result<ReconcilerAction> {
+#[tracing::instrument(skip(at, ctx), level = "debug")]
+async fn reconciler(at: At, ctx: Context<ContextData>) -> Result<ReconcilerAction> {
     match at.status.as_ref().map(|s| s.phase) {
         None => {
             debug!("status.phase: none");
@@ -84,14 +92,16 @@ async fn reconcile(at: At, ctx: Context<ContextData>) -> Result<ReconcilerAction
                 // Expected error Not Found.
                 Err(KubeError::Api(ErrorResponse { code: 404, .. })) => {
                     let pod = build_owned_pod(&at)?;
-                    pods.create(&PostParams::default(), &pod).await?;
+                    pods.create(&PostParams::default(), &pod)
+                        .await
+                        .context(CreatePod)?;
                     Ok(ReconcilerAction {
                         requeue_after: None,
                     })
                 }
 
                 // Unexpected errors.
-                Err(err) => Err(Error::KubeError(err)),
+                Err(err) => Err(Error::GetPod { source: err }),
             }
         }
 
@@ -113,30 +123,34 @@ fn error_policy(error: &Error, _ctx: Context<ContextData>) -> ReconcilerAction {
 }
 
 fn get_name_ref(at: &At) -> Result<&String> {
-    at.metadata
-        .name
-        .as_ref()
-        .ok_or(Error::MissingObjectKey(".metadata.name"))
+    at.metadata.name.as_ref().ok_or(Error::MissingObjectKey {
+        key: ".metadata.name",
+    })
 }
 
 fn get_namespace_ref(at: &At) -> Result<&String> {
     at.metadata
         .namespace
         .as_ref()
-        .ok_or(Error::MissingObjectKey(".metadata.namespace"))
+        .ok_or(Error::MissingObjectKey {
+            key: ".metadata.namespace",
+        })
 }
 
+#[tracing::instrument(skip(client, at), level = "debug")]
 async fn to_next_phase(client: Client, at: &At, phase: AtPhase) -> Result<()> {
     let ats = Api::<At>::namespaced(client, get_namespace_ref(at)?);
     let status = serde_json::json!({
         "status": AtStatus { phase }
     });
+
     ats.patch_status(
         &get_name_ref(at)?,
         &PatchParams::default(),
-        serde_json::to_vec(&status)?,
+        &Patch::Merge(&status),
     )
-    .await?;
+    .await
+    .context(PatchStatus)?;
     Ok(())
 }
 
@@ -168,8 +182,12 @@ fn object_to_owner_reference<K: Meta>(meta: ObjectMeta) -> Result<OwnerReference
     Ok(OwnerReference {
         api_version: K::API_VERSION.to_string(),
         kind: K::KIND.to_string(),
-        name: meta.name.ok_or(Error::MissingObjectKey(".metadata.name"))?,
-        uid: meta.uid.ok_or(Error::MissingObjectKey(".metadata.uid"))?,
+        name: meta.name.ok_or(Error::MissingObjectKey {
+            key: ".metadata.name",
+        })?,
+        uid: meta.uid.ok_or(Error::MissingObjectKey {
+            key: ".metadata.uid",
+        })?,
         ..OwnerReference::default()
     })
 }
