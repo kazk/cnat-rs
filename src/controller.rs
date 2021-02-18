@@ -12,8 +12,8 @@ use kube::{
 use kube_runtime::controller::{Context, Controller, ReconcilerAction};
 use tracing::{debug, info, instrument, warn};
 
-use crate::crd::{At, AtPhase, AtStatus};
 use crate::error::{Error, Result};
+use crate::resource::{At, AtPhase, AtStatus};
 
 pub async fn run(client: Client) {
     let ats = Api::<At>::all(client.clone());
