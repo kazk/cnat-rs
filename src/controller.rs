@@ -11,7 +11,7 @@ use kube::{
 };
 use kube_runtime::controller::{Context, Controller, ReconcilerAction};
 use snafu::{ResultExt, Snafu};
-use tracing::{debug, info, instrument, warn};
+use tracing::{debug, info, warn};
 
 use crate::resource::{At, AtPhase, AtStatus};
 
@@ -34,7 +34,7 @@ pub async fn run(client: Client) {
     Controller::new(ats, ListParams::default())
         .owns(pods, ListParams::default())
         .run(
-            reconcile,
+            reconciler,
             error_policy,
             Context::new(ContextData {
                 client: client.clone(),
@@ -54,8 +54,8 @@ struct ContextData {
 }
 
 /// The reconciler called when `At` or `Pod` change.
-#[instrument(skip(ctx))]
-async fn reconcile(at: At, ctx: Context<ContextData>) -> Result<ReconcilerAction> {
+#[tracing::instrument(skip(at, ctx), level = "debug")]
+async fn reconciler(at: At, ctx: Context<ContextData>) -> Result<ReconcilerAction> {
     match at.status.as_ref().map(|s| s.phase) {
         None => {
             debug!("status.phase: none");
@@ -142,6 +142,7 @@ fn get_namespace_ref(at: &At) -> Result<&String> {
         })
 }
 
+#[tracing::instrument(skip(client, at), level = "debug")]
 async fn to_next_phase(client: Client, at: &At, phase: AtPhase) -> Result<()> {
     let ats = Api::<At>::namespaced(client, get_namespace_ref(at)?);
     let status = serde_json::json!({
