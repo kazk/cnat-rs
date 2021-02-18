@@ -84,6 +84,24 @@ spec:
 
 </details>
 
+## Project Structure
+
+```text
+.
+├── k8s/               CRD and example
+└── src/
+    ├── bin/           Binaries
+    │   ├── cnat.rs    - Run controller (default-run)
+    │   └── crd.rs     - Output CRD YAML
+    ├── controller.rs  Implements the Controller
+    ├── lib.rs
+    └── resource.rs    Defines the Custom Resource
+```
+
+### Commands
+
+- `cargo run`: Run controller
+- `cargo run --bin crd`: Output CRD
 ## Running
 
 ### Locally
