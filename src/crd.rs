@@ -1,3 +1,5 @@
+// https://github.com/GREsau/schemars/pull/65
+#![allow(clippy::field_reassign_with_default)]
 // Defines CRD At.
 // Heavily based on https://github.com/h2oai/h2o-kubernetes/blob/c41f261fe8d323fa217ef9390c8adb9b8e89b9fd/deployment/src/crd.rs
 use chrono::{DateTime, Utc};
@@ -5,9 +7,8 @@ use futures::{StreamExt, TryStreamExt};
 use k8s_openapi::apiextensions_apiserver::pkg::apis::apiextensions::v1::CustomResourceDefinition;
 use kube::{
     api::{ListParams, PostParams, WatchEvent},
-    Api, Client,
+    Api, Client, CustomResource,
 };
-use kube_derive::CustomResource;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 

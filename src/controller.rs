@@ -5,7 +5,7 @@ use k8s_openapi::{
     apimachinery::pkg::apis::meta::v1::OwnerReference,
 };
 use kube::{
-    api::{ListParams, Meta, ObjectMeta, PatchParams, PostParams},
+    api::{ListParams, Meta, ObjectMeta, Patch, PatchParams, PostParams},
     error::ErrorResponse,
     Api, Client, Error as KubeError,
 };
@@ -131,10 +131,11 @@ async fn to_next_phase(client: Client, at: &At, phase: AtPhase) -> Result<()> {
     let status = serde_json::json!({
         "status": AtStatus { phase }
     });
+
     ats.patch_status(
         &get_name_ref(at)?,
         &PatchParams::default(),
-        serde_json::to_vec(&status)?,
+        &Patch::Merge(&status),
     )
     .await?;
     Ok(())
