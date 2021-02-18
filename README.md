@@ -140,7 +140,7 @@ Building on Arch Linux:
 | client-go     |    29    |   2161  |   1212  |       658 |     291 |
 | kubebuilder   |    16    |   1013  |    529  |       357 |     127 |
 | operator-sdk  |    13    |    714  |    488  |       134 |      92 |
-| kube          |     6    |    274  |    230  |        15 |      29 |
+| kube          |     5    |    257  |    217  |        15 |      25 |
 
 
 - `client-go`: `tokei -e cnat-client-go/vendor -e cnat-client-go/hack -t Go cnat-client-go`

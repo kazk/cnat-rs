@@ -114,7 +114,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml",
- "thiserror",
+ "snafu",
  "tokio",
  "tracing",
  "tracing-futures",
