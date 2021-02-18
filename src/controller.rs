@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use futures::{future, StreamExt};
+use futures::StreamExt;
 use k8s_openapi::{
     api::core::v1::{Container, Pod, PodSpec},
     apimachinery::pkg::apis::meta::v1::OwnerReference,
@@ -11,7 +11,7 @@ use kube::{
 };
 use kube_runtime::controller::{Context, Controller, ReconcilerAction};
 use snafu::{ResultExt, Snafu};
-use tracing::{debug, info, warn};
+use tracing::{debug, trace, warn};
 
 use crate::resource::{At, AtPhase, AtStatus};
 
@@ -29,21 +29,16 @@ pub enum Error {
 pub type Result<T, E = Error> = std::result::Result<T, E>;
 
 pub async fn run(client: Client) {
-    let ats = Api::<At>::all(client.clone());
-    let pods = Api::<Pod>::all(client.clone());
-    Controller::new(ats, ListParams::default())
-        .owns(pods, ListParams::default())
-        .run(
-            reconciler,
-            error_policy,
-            Context::new(ContextData {
-                client: client.clone(),
-            }),
-        )
+    let context = Context::new(ContextData {
+        client: client.clone(),
+    });
+    let lp = ListParams::default();
+    Controller::<At>::new(Api::all(client.clone()), lp.clone())
+        .owns::<Pod>(Api::all(client.clone()), lp)
+        .run(reconciler, error_policy, context)
         .filter_map(|x| async move { x.ok() })
-        .for_each(|o| {
-            info!("Reconciled {:?}", o);
-            future::ready(())
+        .for_each(|(_, action)| async move {
+            trace!("Reconciled: requeue after {:?}", action.requeue_after);
         })
         .await;
 }
