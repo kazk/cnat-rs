@@ -5,9 +5,9 @@ use k8s_openapi::{
     apimachinery::pkg::apis::meta::v1::OwnerReference,
 };
 use kube::{
-    api::{ListParams, Meta, ObjectMeta, Patch, PatchParams, PostParams},
+    api::{ListParams, ObjectMeta, Patch, PatchParams, PostParams, ResourceExt},
     error::ErrorResponse,
-    Api, Client, Error as KubeError,
+    Api, Client, Error as KubeError, Resource,
 };
 use kube_runtime::controller::{Context, Controller, ReconcilerAction};
 use snafu::{ResultExt, Snafu};
@@ -160,7 +160,11 @@ fn build_owned_pod(at: &At) -> Result<Pod> {
             name: at.metadata.name.clone(),
             owner_references: Some(vec![OwnerReference {
                 controller: Some(true),
-                ..object_to_owner_reference::<At>(at.metadata.clone())?
+                api_version: At::api_version(&()).into_owned(),
+                kind: At::kind(&()).into_owned(),
+                name: at.name(),
+                uid: at.uid().expect("has uid"),
+                ..Default::default()
             }]),
             ..ObjectMeta::default()
         },
@@ -175,19 +179,5 @@ fn build_owned_pod(at: &At) -> Result<Pod> {
             ..PodSpec::default()
         }),
         ..Pod::default()
-    })
-}
-
-fn object_to_owner_reference<K: Meta>(meta: ObjectMeta) -> Result<OwnerReference> {
-    Ok(OwnerReference {
-        api_version: K::API_VERSION.to_string(),
-        kind: K::KIND.to_string(),
-        name: meta.name.ok_or(Error::MissingObjectKey {
-            key: ".metadata.name",
-        })?,
-        uid: meta.uid.ok_or(Error::MissingObjectKey {
-            key: ".metadata.uid",
-        })?,
-        ..OwnerReference::default()
     })
 }
