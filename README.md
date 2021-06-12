@@ -134,12 +134,6 @@ kubectl apply -f k8s/deployment.yml
 # Create At resource example
 kubectl apply -f k8s/example.yml
 ```
-
-## TODO
-
-- [ ] Write tests
-- [ ] Set up GitHub Actions with k3d
-
 ## Comparisons
 
 ### Binary Size

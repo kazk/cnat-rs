@@ -26,5 +26,8 @@ tracing = "0.1.26"
 tracing-subscriber = "0.2.18"
 snafu = "0.6.10"
 
+[dev-dependencies]
+xid = "1.0.0"
+
 [profile.release]
 lto = true

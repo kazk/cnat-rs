@@ -24,7 +24,7 @@ pub struct AtSpec {
 }
 
 /// Status for custom resource At.
-#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
+#[derive(Deserialize, Serialize, Debug, PartialEq, Clone, JsonSchema)]
 pub struct AtStatus {
     // The phase is set to Running when it's time to execute the command.
     // When the command finishes, it's set to Done.
