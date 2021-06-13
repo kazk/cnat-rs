@@ -11,9 +11,9 @@ use helpers::k3d::TestEnv;
 
 #[tokio::test]
 async fn cnat_controller() {
-    tracing_subscriber::fmt()
+    let _ = tracing_subscriber::fmt()
         .with_env_filter(std::env::var("RUST_LOG").unwrap_or_else(|_| "info".to_owned()))
-        .init();
+        .try_init();
 
     tracing::info!("creating test env");
     let test_env = TestEnv::builder().servers(1).agents(0).build();
