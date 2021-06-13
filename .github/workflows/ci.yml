@@ -1,0 +1,25 @@
+name: CI
+
+on:
+  push:
+    branches: main
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          override: true
+          toolchain: stable
+          profile: minimal
+
+      - uses: Swatinem/rust-cache@v1
+
+      - name: Install k3d
+        run: |
+          curl -s https://raw.githubusercontent.com/rancher/k3d/main/install.sh | TAG=v4.4.4 bash
+
+      - run: cargo test
