@@ -1,6 +1,5 @@
 use std::time::Duration;
 
-use cnat::At;
 use futures::{StreamExt, TryStreamExt};
 use k8s_openapi::{
     api::core::v1::ServiceAccount,
@@ -8,7 +7,7 @@ use k8s_openapi::{
 };
 use kube::{
     api::{ListParams, WatchEvent},
-    Api, Client, Resource,
+    Api, Client, CustomResourceExt, Resource,
 };
 use tokio::time;
 
@@ -32,18 +31,23 @@ pub async fn cluster_ready(client: Client, timeout: u64) -> Result<(), time::err
     .await
 }
 
-// TODO Use `kube::Resource + kube::CustomResourceExt` once released
-pub async fn create_crd(client: Client, timeout_secs: u32) -> CustomResourceDefinition {
+/// Create CRD `K` and wait for `Established` condition.
+pub async fn create_crd<K>(client: Client, timeout_secs: u32) -> CustomResourceDefinition
+where
+    K: Resource<DynamicType = ()> + CustomResourceExt,
+{
     tracing::info!("CRD: adding and waiting for Established condition");
     tracing::debug!("CRD: creating");
     let crds = Api::<CustomResourceDefinition>::all(client);
-    crds.create(&Default::default(), &At::crd()).await.unwrap();
+    crds.create(&Default::default(), &<K as CustomResourceExt>::crd())
+        .await
+        .unwrap();
     tracing::debug!("CRD: created");
 
     let name = format!(
         "{}.{}",
-        <At as Resource>::plural(&()),
-        <At as Resource>::group(&())
+        <K as Resource>::plural(&()),
+        <K as Resource>::group(&())
     );
     let lp = ListParams::default()
         .fields(&format!("metadata.name={}", name))
@@ -56,7 +60,9 @@ pub async fn create_crd(client: Client, timeout_secs: u32) -> CustomResourceDefi
                 tracing::debug!("CRD: added");
                 tracing::trace!(
                     "CRD: conditions {:?}",
-                    crd.status.as_ref().and_then(|s| s.conditions.as_ref())
+                    crd.status
+                        .as_ref()
+                        .map(|s| AsRef::<Vec<_>>::as_ref(&s.conditions))
                 );
             }
 
@@ -64,17 +70,18 @@ pub async fn create_crd(client: Client, timeout_secs: u32) -> CustomResourceDefi
                 tracing::debug!("CRD: modified");
                 tracing::trace!(
                     "CRD: conditions {:?}",
-                    crd.status.as_ref().and_then(|s| s.conditions.as_ref())
+                    crd.status
+                        .as_ref()
+                        .map(|s| AsRef::<Vec<_>>::as_ref(&s.conditions))
                 );
                 let established = crd
                     .status
                     .as_ref()
-                    .and_then(|status| {
-                        status.conditions.as_ref().map(|conditions| {
-                            conditions
-                                .iter()
-                                .any(|c| c.type_ == "Established" && c.status == "True")
-                        })
+                    .map(|status| {
+                        status
+                            .conditions
+                            .iter()
+                            .any(|c| c.type_ == "Established" && c.status == "True")
                     })
                     .unwrap_or(false);
                 if established {
