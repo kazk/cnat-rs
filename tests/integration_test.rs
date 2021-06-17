@@ -21,7 +21,7 @@ async fn cnat_controller() {
     helpers::cluster_ready(client.clone(), 30)
         .await
         .expect("cluster becomes ready");
-    helpers::create_crd(client.clone(), 45).await;
+    helpers::create_crd::<At>(client.clone(), 45).await;
 
     {
         tracing::info!("starting controller");

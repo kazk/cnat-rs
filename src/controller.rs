@@ -158,21 +158,21 @@ fn build_owned_pod(at: &At) -> Result<Pod> {
     Ok(Pod {
         metadata: ObjectMeta {
             name: at.metadata.name.clone(),
-            owner_references: Some(vec![OwnerReference {
+            owner_references: vec![OwnerReference {
                 controller: Some(true),
                 api_version: At::api_version(&()).into_owned(),
                 kind: At::kind(&()).into_owned(),
                 name: at.name(),
                 uid: at.uid().expect("has uid"),
                 ..Default::default()
-            }]),
+            }],
             ..ObjectMeta::default()
         },
         spec: Some(PodSpec {
             containers: vec![Container {
                 name: "busybox".into(),
                 image: Some("busybox".into()),
-                command: Some(at.spec.command.clone()),
+                command: at.spec.command.clone(),
                 ..Container::default()
             }],
             restart_policy: Some("Never".into()),
