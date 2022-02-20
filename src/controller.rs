@@ -12,21 +12,21 @@ use kube::{
     runtime::controller::{Context, Controller, ReconcilerAction},
     Api, Client, Error as KubeError, Resource,
 };
-use snafu::{ResultExt, Snafu};
+use thiserror::Error;
 use tracing::{debug, trace, warn};
 
 use crate::resource::{At, AtPhase, AtStatus};
 
-#[derive(Debug, Snafu)]
+#[derive(Debug, Error)]
 pub enum Error {
-    #[snafu(display("Failed to get Pod: {}", source))]
-    GetPod { source: kube::Error },
-    #[snafu(display("Failed to create Pod: {}", source))]
-    CreatePod { source: kube::Error },
-    #[snafu(display("Failed to patch status: {}", source))]
-    PatchStatus { source: kube::Error },
-    #[snafu(display("Missing object key: {}", key))]
-    MissingObjectKey { key: &'static str },
+    #[error("Failed to get Pod: {0}")]
+    GetPod(#[source] kube::Error),
+    #[error("Failed to create Pod: {0}")]
+    CreatePod(#[source] kube::Error),
+    #[error("Failed to patch status: {0}")]
+    PatchStatus(#[source] kube::Error),
+    #[error("Missing object key: {0}")]
+    MissingObjectKey(&'static str),
 }
 pub type Result<T, E = Error> = std::result::Result<T, E>;
 
@@ -96,14 +96,14 @@ async fn reconciler(at: Arc<At>, ctx: Context<ContextData>) -> Result<Reconciler
                     let pod = build_owned_pod(&at)?;
                     pods.create(&PostParams::default(), &pod)
                         .await
-                        .context(CreatePod)?;
+                        .map_err(Error::CreatePod)?;
                     Ok(ReconcilerAction {
                         requeue_after: None,
                     })
                 }
 
                 // Unexpected errors.
-                Err(err) => Err(Error::GetPod { source: err }),
+                Err(err) => Err(Error::GetPod(err)),
             }
         }
 
@@ -125,18 +125,17 @@ fn error_policy(error: &Error, _ctx: Context<ContextData>) -> ReconcilerAction {
 }
 
 fn get_name_ref(at: &At) -> Result<&String> {
-    at.metadata.name.as_ref().ok_or(Error::MissingObjectKey {
-        key: ".metadata.name",
-    })
+    at.metadata
+        .name
+        .as_ref()
+        .ok_or(Error::MissingObjectKey(".metadata.name"))
 }
 
 fn get_namespace_ref(at: &At) -> Result<&String> {
     at.metadata
         .namespace
         .as_ref()
-        .ok_or(Error::MissingObjectKey {
-            key: ".metadata.namespace",
-        })
+        .ok_or(Error::MissingObjectKey(".metadata.namespace"))
 }
 
 #[tracing::instrument(skip(client, at), level = "debug")]
@@ -152,7 +151,7 @@ async fn to_next_phase(client: Client, at: &At, phase: AtPhase) -> Result<()> {
         &Patch::Merge(&status),
     )
     .await
-    .context(PatchStatus)?;
+    .map_err(Error::PatchStatus)?;
     Ok(())
 }
 
