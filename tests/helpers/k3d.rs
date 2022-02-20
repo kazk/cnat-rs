@@ -149,16 +149,16 @@ impl TestEnvBuilder {
             // > not run in integration environment
             // > https://git.io/JZKFC
             "--k3s-arg",
-            "--kube-apiserver-arg=disable-admission-plugins=ServiceAccount@server:0",
+            "--kube-apiserver-arg=disable-admission-plugins=ServiceAccount@server:*",
             // Disable components and features
             "--k3s-arg",
-            "--disable=servicelb@server:0",
+            "--disable=servicelb@server:*",
             "--k3s-arg",
-            "--disable=traefik@server:0",
+            "--disable=traefik@server:*",
             "--k3s-arg",
-            "--disable=metrics-server@server:0",
+            "--disable=metrics-server@server:*",
             "--k3s-arg",
-            "--disable-cloud-controller@server:0",
+            "--disable-cloud-controller@server:*",
             "--no-rollback",
             &servers,
             &agents,
