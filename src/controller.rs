@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use chrono::{DateTime, Utc};
 use futures::StreamExt;
 use k8s_openapi::{
@@ -7,9 +9,9 @@ use k8s_openapi::{
 use kube::{
     api::{ListParams, ObjectMeta, Patch, PatchParams, PostParams, ResourceExt},
     error::ErrorResponse,
+    runtime::controller::{Context, Controller, ReconcilerAction},
     Api, Client, Error as KubeError, Resource,
 };
-use kube_runtime::controller::{Context, Controller, ReconcilerAction};
 use snafu::{ResultExt, Snafu};
 use tracing::{debug, trace, warn};
 
@@ -50,7 +52,7 @@ struct ContextData {
 
 /// The reconciler called when `At` or `Pod` change.
 #[tracing::instrument(skip(at, ctx), level = "debug")]
-async fn reconciler(at: At, ctx: Context<ContextData>) -> Result<ReconcilerAction> {
+async fn reconciler(at: Arc<At>, ctx: Context<ContextData>) -> Result<ReconcilerAction> {
     match at.status.as_ref().map(|s| s.phase) {
         None => {
             debug!("status.phase: none");
@@ -158,21 +160,21 @@ fn build_owned_pod(at: &At) -> Result<Pod> {
     Ok(Pod {
         metadata: ObjectMeta {
             name: at.metadata.name.clone(),
-            owner_references: vec![OwnerReference {
+            owner_references: Some(vec![OwnerReference {
                 controller: Some(true),
                 api_version: At::api_version(&()).into_owned(),
                 kind: At::kind(&()).into_owned(),
                 name: at.name(),
                 uid: at.uid().expect("has uid"),
                 ..Default::default()
-            }],
+            }]),
             ..ObjectMeta::default()
         },
         spec: Some(PodSpec {
             containers: vec![Container {
                 name: "busybox".into(),
                 image: Some("busybox".into()),
-                command: at.spec.command.clone(),
+                command: Some(at.spec.command.clone()),
                 ..Container::default()
             }],
             restart_policy: Some("Never".into()),

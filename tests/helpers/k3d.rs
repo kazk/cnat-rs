@@ -77,12 +77,6 @@ pub struct TestEnvBuilder {
     servers: usize,
     /// The number of agents. Default: 0
     agents: usize,
-    /// Inject the Host IP as `host.k3d.internal` into the containers and CoreDNS.
-    /// Default: false
-    host_ip_injection: bool,
-    /// Create an image volume for importing images.
-    /// Default: false
-    create_image_volume: bool,
     /// Create a `LoadBalancer` in front of the server nodes.
     /// Default: false
     create_load_balancer: bool,
@@ -97,8 +91,6 @@ impl Default for TestEnvBuilder {
         Self {
             servers: 1,
             agents: 0,
-            host_ip_injection: false,
-            create_image_volume: false,
             create_load_balancer: false,
             verbose: false,
             version: None,
@@ -116,18 +108,6 @@ impl TestEnvBuilder {
     /// Set the number of agents in the temporary cluster.
     pub fn agents(&mut self, agents: usize) -> &mut Self {
         self.agents = agents;
-        self
-    }
-
-    /// Enable host ip injection.
-    pub fn inject_host_ip(&mut self) -> &mut Self {
-        self.host_ip_injection = true;
-        self
-    }
-
-    /// Create image volume.
-    pub fn with_image_volume(&mut self) -> &mut Self {
-        self.create_image_volume = true;
         self
     }
 
@@ -168,29 +148,23 @@ impl TestEnvBuilder {
             // > in normal apiserver operation this SA is created by controller, but that is
             // > not run in integration environment
             // > https://git.io/JZKFC
-            "--k3s-server-arg",
-            "--kube-apiserver-arg=disable-admission-plugins=ServiceAccount",
+            "--k3s-arg",
+            "--kube-apiserver-arg=disable-admission-plugins=ServiceAccount@server:0",
             // Disable components and features
-            "--k3s-server-arg",
-            "--disable=servicelb",
-            "--k3s-server-arg",
-            "--disable=traefik",
-            "--k3s-server-arg",
-            "--disable=metrics-server",
-            "--k3s-server-arg",
-            "--disable-cloud-controller",
+            "--k3s-arg",
+            "--disable=servicelb@server:0",
+            "--k3s-arg",
+            "--disable=traefik@server:0",
+            "--k3s-arg",
+            "--disable=metrics-server@server:0",
+            "--k3s-arg",
+            "--disable-cloud-controller@server:0",
             "--no-rollback",
             &servers,
             &agents,
         ];
         if self.verbose {
             args.push("--verbose");
-        }
-        if !self.host_ip_injection {
-            args.push("--no-hostip");
-        }
-        if !self.create_image_volume {
-            args.push("--no-image-volume");
         }
         if !self.create_load_balancer {
             args.push("--no-lb");
