@@ -75,8 +75,8 @@ async fn reconciler(at: Arc<At>, ctx: Context<ContextData>) -> Result<Reconciler
         Some(AtPhase::Running) => {
             debug!("status.phase: running");
             let client = ctx.get_ref().client.clone();
-            let pods = Api::<Pod>::namespaced(client.clone(), &get_namespace_ref(&at)?);
-            match pods.get(&get_name_ref(&at)?).await {
+            let pods = Api::<Pod>::namespaced(client.clone(), get_namespace_ref(&at)?);
+            match pods.get(get_name_ref(&at)?).await {
                 // Found pod.
                 Ok(pod) => match pod.status.and_then(|x| x.phase).as_ref() {
                     Some(pod_phase) if pod_phase == "Succeeded" || pod_phase == "Failed" => {
@@ -147,7 +147,7 @@ async fn to_next_phase(client: Client, at: &At, phase: AtPhase) -> Result<()> {
     });
 
     ats.patch_status(
-        &get_name_ref(at)?,
+        get_name_ref(at)?,
         &PatchParams::default(),
         &Patch::Merge(&status),
     )
