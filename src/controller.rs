@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use chrono::{DateTime, Utc};
 use futures::StreamExt;
 use k8s_openapi::{
@@ -7,24 +9,24 @@ use k8s_openapi::{
 use kube::{
     api::{ListParams, ObjectMeta, Patch, PatchParams, PostParams, ResourceExt},
     error::ErrorResponse,
+    runtime::controller::{Context, Controller, ReconcilerAction},
     Api, Client, Error as KubeError, Resource,
 };
-use kube_runtime::controller::{Context, Controller, ReconcilerAction};
-use snafu::{ResultExt, Snafu};
+use thiserror::Error;
 use tracing::{debug, trace, warn};
 
 use crate::resource::{At, AtPhase, AtStatus};
 
-#[derive(Debug, Snafu)]
+#[derive(Debug, Error)]
 pub enum Error {
-    #[snafu(display("Failed to get Pod: {}", source))]
-    GetPod { source: kube::Error },
-    #[snafu(display("Failed to create Pod: {}", source))]
-    CreatePod { source: kube::Error },
-    #[snafu(display("Failed to patch status: {}", source))]
-    PatchStatus { source: kube::Error },
-    #[snafu(display("Missing object key: {}", key))]
-    MissingObjectKey { key: &'static str },
+    #[error("Failed to get Pod: {0}")]
+    GetPod(#[source] kube::Error),
+    #[error("Failed to create Pod: {0}")]
+    CreatePod(#[source] kube::Error),
+    #[error("Failed to patch status: {0}")]
+    PatchStatus(#[source] kube::Error),
+    #[error("Missing object key: {0}")]
+    MissingObjectKey(&'static str),
 }
 pub type Result<T, E = Error> = std::result::Result<T, E>;
 
@@ -50,7 +52,7 @@ struct ContextData {
 
 /// The reconciler called when `At` or `Pod` change.
 #[tracing::instrument(skip(at, ctx), level = "debug")]
-async fn reconciler(at: At, ctx: Context<ContextData>) -> Result<ReconcilerAction> {
+async fn reconciler(at: Arc<At>, ctx: Context<ContextData>) -> Result<ReconcilerAction> {
     match at.status.as_ref().map(|s| s.phase) {
         None => {
             debug!("status.phase: none");
@@ -73,8 +75,8 @@ async fn reconciler(at: At, ctx: Context<ContextData>) -> Result<ReconcilerActio
         Some(AtPhase::Running) => {
             debug!("status.phase: running");
             let client = ctx.get_ref().client.clone();
-            let pods = Api::<Pod>::namespaced(client.clone(), &get_namespace_ref(&at)?);
-            match pods.get(&get_name_ref(&at)?).await {
+            let pods = Api::<Pod>::namespaced(client.clone(), get_namespace_ref(&at)?);
+            match pods.get(get_name_ref(&at)?).await {
                 // Found pod.
                 Ok(pod) => match pod.status.and_then(|x| x.phase).as_ref() {
                     Some(pod_phase) if pod_phase == "Succeeded" || pod_phase == "Failed" => {
@@ -94,14 +96,14 @@ async fn reconciler(at: At, ctx: Context<ContextData>) -> Result<ReconcilerActio
                     let pod = build_owned_pod(&at)?;
                     pods.create(&PostParams::default(), &pod)
                         .await
-                        .context(CreatePod)?;
+                        .map_err(Error::CreatePod)?;
                     Ok(ReconcilerAction {
                         requeue_after: None,
                     })
                 }
 
                 // Unexpected errors.
-                Err(err) => Err(Error::GetPod { source: err }),
+                Err(err) => Err(Error::GetPod(err)),
             }
         }
 
@@ -123,18 +125,17 @@ fn error_policy(error: &Error, _ctx: Context<ContextData>) -> ReconcilerAction {
 }
 
 fn get_name_ref(at: &At) -> Result<&String> {
-    at.metadata.name.as_ref().ok_or(Error::MissingObjectKey {
-        key: ".metadata.name",
-    })
+    at.metadata
+        .name
+        .as_ref()
+        .ok_or(Error::MissingObjectKey(".metadata.name"))
 }
 
 fn get_namespace_ref(at: &At) -> Result<&String> {
     at.metadata
         .namespace
         .as_ref()
-        .ok_or(Error::MissingObjectKey {
-            key: ".metadata.namespace",
-        })
+        .ok_or(Error::MissingObjectKey(".metadata.namespace"))
 }
 
 #[tracing::instrument(skip(client, at), level = "debug")]
@@ -145,12 +146,12 @@ async fn to_next_phase(client: Client, at: &At, phase: AtPhase) -> Result<()> {
     });
 
     ats.patch_status(
-        &get_name_ref(at)?,
+        get_name_ref(at)?,
         &PatchParams::default(),
         &Patch::Merge(&status),
     )
     .await
-    .context(PatchStatus)?;
+    .map_err(Error::PatchStatus)?;
     Ok(())
 }
 
@@ -158,21 +159,21 @@ fn build_owned_pod(at: &At) -> Result<Pod> {
     Ok(Pod {
         metadata: ObjectMeta {
             name: at.metadata.name.clone(),
-            owner_references: vec![OwnerReference {
+            owner_references: Some(vec![OwnerReference {
                 controller: Some(true),
                 api_version: At::api_version(&()).into_owned(),
                 kind: At::kind(&()).into_owned(),
                 name: at.name(),
                 uid: at.uid().expect("has uid"),
                 ..Default::default()
-            }],
+            }]),
             ..ObjectMeta::default()
         },
         spec: Some(PodSpec {
             containers: vec![Container {
                 name: "busybox".into(),
                 image: Some("busybox".into()),
-                command: at.spec.command.clone(),
+                command: Some(at.spec.command.clone()),
                 ..Container::default()
             }],
             restart_policy: Some("Never".into()),
