@@ -8,9 +8,8 @@ use k8s_openapi::{
 };
 use kube::{
     api::{ListParams, ObjectMeta, Patch, PatchParams, PostParams, ResourceExt},
-    error::ErrorResponse,
     runtime::controller::{Context, Controller, ReconcilerAction},
-    Api, Client, Error as KubeError, Resource,
+    Api, Client, Resource,
 };
 use thiserror::Error;
 use tracing::{debug, trace, warn};
@@ -76,9 +75,12 @@ async fn reconciler(at: Arc<At>, ctx: Context<ContextData>) -> Result<Reconciler
             debug!("status.phase: running");
             let client = ctx.get_ref().client.clone();
             let pods = Api::<Pod>::namespaced(client.clone(), get_namespace_ref(&at)?);
-            match pods.get(get_name_ref(&at)?).await {
-                // Found pod.
-                Ok(pod) => match pod.status.and_then(|x| x.phase).as_ref() {
+            match pods
+                .get_opt(get_name_ref(&at)?)
+                .await
+                .map_err(Error::GetPod)?
+            {
+                Some(pod) => match pod.status.and_then(|x| x.phase).as_ref() {
                     Some(pod_phase) if pod_phase == "Succeeded" || pod_phase == "Failed" => {
                         to_next_phase(client.clone(), &at, AtPhase::Done).await?;
                         Ok(ReconcilerAction {
@@ -90,9 +92,7 @@ async fn reconciler(at: Arc<At>, ctx: Context<ContextData>) -> Result<Reconciler
                         requeue_after: None,
                     }),
                 },
-
-                // Expected error Not Found.
-                Err(KubeError::Api(ErrorResponse { code: 404, .. })) => {
+                None => {
                     let pod = build_owned_pod(&at)?;
                     pods.create(&PostParams::default(), &pod)
                         .await
@@ -101,9 +101,6 @@ async fn reconciler(at: Arc<At>, ctx: Context<ContextData>) -> Result<Reconciler
                         requeue_after: None,
                     })
                 }
-
-                // Unexpected errors.
-                Err(err) => Err(Error::GetPod(err)),
             }
         }
 
