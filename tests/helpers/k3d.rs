@@ -159,6 +159,13 @@ impl TestEnvBuilder {
             "--disable=metrics-server@server:*",
             "--k3s-arg",
             "--disable-cloud-controller@server:*",
+            // change the kubelet’s eviction thresholds to prevent pods eviction
+            // due to lack of disk space
+            // https://github.com/k3d-io/k3d/issues/133#issuecomment-549065666
+            "--k3s-arg",
+            "--kubelet-arg=eviction-hard=imagefs.available<1%,nodefs.available<1%@agent:*",
+            "--k3s-arg",
+            "--kubelet-arg=eviction-minimum-reclaim=imagefs.available=1%,nodefs.available=1%@agent:*",
             "--no-rollback",
             &servers,
             &agents,
